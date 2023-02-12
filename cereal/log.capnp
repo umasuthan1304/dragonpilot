@@ -459,6 +459,8 @@ struct PandaState @0xa7649e2575e4591e {
     interruptRateClockSource @20;
     interruptRateTick @21;
     interruptRateExti @22;
+    interruptRateSpi @23;
+    interruptRateUart7 @24;
     # Update max fault type in boardd when adding faults
   }
 
@@ -472,6 +474,7 @@ struct PandaState @0xa7649e2575e4591e {
     dos @6;
     redPanda @7;
     redPandaV2 @8;
+    tres @9;
   }
 
   enum HarnessStatus {
@@ -620,6 +623,8 @@ struct ControlsState @0x97ff69c53601abf1 {
   enabled @19 :Bool;
   active @36 :Bool;
 
+  experimentalMode @64 :Bool;
+
   longControlState @30 :Car.CarControl.Actuators.LongControlState;
   vPid @2 :Float32;
   vTargetLead @3 :Float32;
@@ -650,10 +655,13 @@ struct ControlsState @0x97ff69c53601abf1 {
   lateralControlState :union {
     indiState @52 :LateralINDIState;
     pidState @53 :LateralPIDState;
-    lqrState @55 :LateralLQRState;
     angleState @58 :LateralAngleState;
     debugState @59 :LateralDebugState;
     torqueState @60 :LateralTorqueState;
+    curvatureState @65 :LateralCurvatureState;
+
+    #dp
+    lqrState @55 :LateralLQRState;
   }
 
   enum OpenpilotState @0xdbe58b96d2d1ac61 {
@@ -738,6 +746,18 @@ struct ControlsState @0x97ff69c53601abf1 {
     steeringAngleDesiredDeg @4 :Float32;
   }
 
+  struct LateralCurvatureState {
+    active @0 :Bool;
+    actualCurvature @1 :Float32;
+    desiredCurvature @2 :Float32;
+    error @3 :Float32;
+    p @4 :Float32;
+    i @5 :Float32;
+    f @6 :Float32;
+    output @7 :Float32;
+    saturated @8 :Bool;
+  }
+
   struct LateralDebugState {
     active @0 :Bool;
     steeringAngleDeg @1 :Float32;
@@ -806,6 +826,9 @@ struct ModelDataV2 {
 
   meta @12 :MetaData;
 
+  # Model perceived motion
+  temporalPose @21 :Pose;
+
   # All SI units and in device frame
   struct XYZTData {
     x @0 :List(Float32);
@@ -868,6 +891,13 @@ struct ModelDataV2 {
     brake3MetersPerSecondSquaredProbs @4 :List(Float32);
     brake4MetersPerSecondSquaredProbs @5 :List(Float32);
     brake5MetersPerSecondSquaredProbs @6 :List(Float32);
+  }
+
+  struct Pose {
+    trans @0 :List(Float32); # m/s in device frame
+    rot @1 :List(Float32); # rad/s in device frame
+    transStd @2 :List(Float32); # std m/s in device frame
+    rotStd @3 :List(Float32); # std rad/s in device frame
   }
 }
 
@@ -2001,6 +2031,30 @@ struct NavRoute {
   }
 }
 
+struct MapRenderState {
+  locationMonoTime @0 :UInt64;
+  renderTime @1 :Float32;
+  frameId @2: UInt32;
+}
+
+struct NavModelData {
+  frameId @0 :UInt32;
+  modelExecutionTime @1 :Float32;
+  dspExecutionTime @2 :Float32;
+  features @3 :List(Float32);
+  # predicted future position
+  position @4 :XYData;
+  desirePrediction @5 :List(Float32);
+
+  # All SI units and in device frame
+  struct XYData {
+    x @0 :List(Float32);
+    y @1 :List(Float32);
+    xStd @2 :List(Float32);
+    yStd @3 :List(Float32);
+  }
+}
+
 struct EncodeData {
   idx @0 :EncodeIndex;
   data @1 :Data;
@@ -2009,6 +2063,15 @@ struct EncodeData {
 }
 
 struct UserFlag {
+}
+
+struct Microphone {
+  soundPressure @0 :Float32;
+
+  # uncalibrated, A-weighted
+  soundPressureWeighted @3 :Float32;
+  soundPressureWeightedDb @1 :Float32;
+  filteredSoundPressureWeightedDb @2 :Float32;
 }
 
 struct Event {
@@ -2060,6 +2123,7 @@ struct Event {
     liveLocationKalman @72 :LiveLocationKalman;
     modelV2 @75 :ModelDataV2;
     driverStateV2 @92 :DriverStateV2;
+    navModel @104 :NavModelData;
 
     # camera stuff, each camera state has a matching encode idx
     roadCameraState @2 :FrameData;
@@ -2069,6 +2133,9 @@ struct Event {
     driverEncodeIdx @76 :EncodeIndex;
     wideRoadEncodeIdx @77 :EncodeIndex;
     qRoadEncodeIdx @90 :EncodeIndex;
+
+    # microphone data
+    microphone @103 :Microphone;
 
     # systems stuff
     androidLog @20 :AndroidLogEntry;
@@ -2084,11 +2151,12 @@ struct Event {
     navInstruction @82 :NavInstruction;
     navRoute @83 :NavRoute;
     navThumbnail @84: Thumbnail;
+    mapRenderState @105: MapRenderState;
 
     # UI services
     userFlag @93 :UserFlag;
     uiDebug @102 :UIDebug;
-    # dp reserve 103,104
+    # dp reserve 105,106
     # *********** debug ***********
     testJoystick @52 :Joystick;
     roadEncodeData @86 :EncodeData;
@@ -2096,8 +2164,8 @@ struct Event {
     wideRoadEncodeData @88 :EncodeData;
     qRoadEncodeData @89 :EncodeData;
 
-    dragonConf @103 :Dp.DragonConf;
-    liveMapData @104: LiveMapData;
+    dragonConf @106 :Dp.DragonConf;
+    liveMapData @107: LiveMapData;
 
     # *********** legacy + deprecated ***********
     model @9 :Legacy.ModelData; # TODO: rename modelV2 and mark this as deprecated

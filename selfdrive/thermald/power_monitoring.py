@@ -19,10 +19,11 @@ CAR_VOLTAGE_LOW_PASS_K = 0.091 # LPF gain for 5s tau (dt/tau / (dt/tau + 1))
 CAR_BATTERY_CAPACITY_uWh = 30e6
 CAR_CHARGING_RATE_W = 45
 
-VBATT_PAUSE_CHARGING = 11.0           # Lower limit on the LPF car battery voltage
+VBATT_PAUSE_CHARGING = 11.8           # Lower limit on the LPF car battery voltage
 VBATT_INSTANT_PAUSE_CHARGING = 7.0    # Lower limit on the instant car battery voltage measurements to avoid triggering on instant power loss
 MAX_TIME_OFFROAD_S = 30*3600
 MIN_ON_TIME_S = 3600
+VOLTAGE_SHUTDOWN_MIN_OFFROAD_TIME_S = 60
 
 class PowerMonitoring:
   def __init__(self):
@@ -44,12 +45,12 @@ class PowerMonitoring:
     self.car_battery_capacity_uWh = max((CAR_BATTERY_CAPACITY_uWh / 10), int(car_battery_capacity_uWh))
 
   # Calculation tick
-  def calculate(self, peripheralState, ignition):
+  def calculate(self, voltage: Optional[int], ignition: bool):
     try:
       now = sec_since_boot()
 
       # If peripheralState is None, we're probably not in a car, so we don't care
-      if peripheralState is None or peripheralState.pandaType == log.PandaState.PandaType.unknown:
+      if voltage is None:
         with self.integration_lock:
           self.last_measurement_time = None
           self.next_pulsed_measurement_time = None
@@ -57,8 +58,8 @@ class PowerMonitoring:
         return
 
       # Low-pass battery voltage
-      self.car_voltage_instant_mV = peripheralState.voltage
-      self.car_voltage_mV = ((peripheralState.voltage * CAR_VOLTAGE_LOW_PASS_K) + (self.car_voltage_mV * (1 - CAR_VOLTAGE_LOW_PASS_K)))
+      self.car_voltage_instant_mV = voltage
+      self.car_voltage_mV = ((voltage * CAR_VOLTAGE_LOW_PASS_K) + (self.car_voltage_mV * (1 - CAR_VOLTAGE_LOW_PASS_K)))
       # statlog.gauge("car_voltage", self.car_voltage_mV / 1e3)
 
       # Cap the car battery power and save it in a param every 10-ish seconds
@@ -84,8 +85,6 @@ class PowerMonitoring:
           self.car_battery_capacity_uWh += (CAR_CHARGING_RATE_W * 1e6 * integration_time_h)
           self.last_measurement_time = now
       else:
-        # No ignition, we integrate the offroad power used by the device
-        is_uno = peripheralState.pandaType == log.PandaState.PandaType.uno
         # Get current power draw somehow
         current_power = HARDWARE.get_current_power_draw() # pylint: disable=assignment-from-none
         if current_power is not None:
@@ -121,7 +120,7 @@ class PowerMonitoring:
           self.next_pulsed_measurement_time = None
           return
 
-        elif self.next_pulsed_measurement_time is None and not is_uno:
+        elif self.next_pulsed_measurement_time is None:
           # On a charging EON with black panda, or drawing more than 400mA out of a white/grey one
           # Only way to get the power draw is to turn off charging for a few sec and check what the discharging rate is
           # We shouldn't do this very often, so make sure it has been some long-ish random time interval
@@ -142,8 +141,8 @@ class PowerMonitoring:
         if self.last_measurement_time:
           integration_time_h = (t - self.last_measurement_time) / 3600
           power_used = (current_power * 1000000) * integration_time_h
-          if power_used < 0:
-            raise ValueError(f"Negative power used! Integration time: {integration_time_h} h Current Power: {power_used} uWh")
+          # if power_used < 0:
+          #   raise ValueError(f"Negative power used! Integration time: {integration_time_h} h Current Power: {power_used} uWh")
           self.power_used_uWh += power_used
           self.car_battery_capacity_uWh -= power_used
           self.last_measurement_time = t

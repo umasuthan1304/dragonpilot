@@ -195,7 +195,7 @@ class NormalPermanentAlert(Alert):
 
 
 class StartupAlert(Alert):
-  def __init__(self, alert_text_1: str, alert_text_2: str = _("Always keep hands on wheel and eyes on road"), alert_status=AlertStatus.normal):
+  def __init__(self, alert_text_1: str, alert_text_2: str = _("Happy Holiday / New Years! Safe Travel, cya in 2023"), alert_status=AlertStatus.normal):
     super().__init__(alert_text_1, alert_text_2,
                      alert_status, AlertSize.mid,
                      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 10.),
@@ -255,10 +255,9 @@ def calibration_incomplete_alert(CP: car.CarParams, CS: car.CarState, sm: messag
 
 
 def no_gps_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int) -> Alert:
-  gps_integrated = sm['peripheralState'].pandaType in (log.PandaState.PandaType.uno, log.PandaState.PandaType.dos)
   return Alert(
     _("Poor GPS reception"),
-    _("Hardware malfunctioning if sky is visible") if gps_integrated else _("Check GPS antenna placement"),
+    _("Hardware malfunctioning if sky is visible"),
     AlertStatus.normal, AlertSize.mid,
     Priority.LOWER, VisualAlert.none, AudibleAlert.none, .2, creation_delay=300.)
 
@@ -450,7 +449,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.steerTempUnavailableSilent: {
-    ET.WARNING: Alert(
+    ET.PERMANENT: Alert(
       _("Steering Temporarily Unavailable"),
       "",
       AlertStatus.userPrompt, AlertSize.small,
@@ -515,9 +514,9 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.resumeRequired: {
     ET.WARNING: Alert(
-      _("STOPPED"),
-      _("Press Resume to Go"),
-      AlertStatus.userPrompt, AlertSize.mid,
+      _("Press Resume to Exit Standstill"),
+      _(""),
+      AlertStatus.userPrompt, AlertSize.small,
       Priority.LOW, VisualAlert.none, AudibleAlert.none, .2),
   },
 
@@ -526,7 +525,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.preLaneChangeLeft: {
-    ET.WARNING: Alert(
+    ET.PERMANENT: Alert(
       _("Steer Left to Start Lane Change Once Safe"),
       "",
       AlertStatus.normal, AlertSize.small,
@@ -534,7 +533,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.preLaneChangeRight: {
-    ET.WARNING: Alert(
+    ET.PERMANENT: Alert(
       _("Steer Right to Start Lane Change Once Safe"),
       "",
       AlertStatus.normal, AlertSize.small,
@@ -542,7 +541,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.laneChangeBlocked: {
-    ET.WARNING: Alert(
+    ET.PERMANENT: Alert(
       _("Car Detected in Blindspot"),
       "",
       AlertStatus.userPrompt, AlertSize.small,
@@ -550,7 +549,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.laneChange: {
-    ET.WARNING: Alert(
+    ET.PERMANENT: Alert(
       _("Changing Lanes"),
       "",
       AlertStatus.normal, AlertSize.small,
@@ -558,7 +557,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.steerSaturated: {
-    ET.WARNING: Alert(
+    ET.PERMANENT: Alert(
       _("Take Control"),
       _("Turn Exceeds Steering Limit"),
       AlertStatus.userPrompt, AlertSize.mid,
@@ -623,6 +622,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
 
   EventName.buttonCancel: {
     ET.USER_DISABLE: EngagementAlert(AudibleAlert.disengage),
+    ET.NO_ENTRY: NoEntryAlert("Cancel Pressed"),
   },
 
   EventName.brakeHold: {
@@ -641,9 +641,9 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
                               visual_alert=VisualAlert.brakePressed),
   },
 
-  EventName.pedalPressedPreEnable: {
+  EventName.preEnableStandstill: {
     ET.PRE_ENABLE: Alert(
-      _("Release Pedal to Engage"),
+      _("Release Brake to Engage"),
       "",
       AlertStatus.normal, AlertSize.small,
       Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .1, creation_delay=1.),
@@ -680,6 +680,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.steerTempUnavailable: {
+    ET.PERMANENT: soft_disable_alert(_("Steering Temporarily Unavailable")),
     ET.SOFT_DISABLE: soft_disable_alert(_("Steering Temporarily Unavailable")),
     ET.NO_ENTRY: NoEntryAlert(_("Steering Temporarily Unavailable")),
   },
@@ -832,9 +833,9 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
   },
 
   EventName.accFaulted: {
-    ET.IMMEDIATE_DISABLE: ImmediateDisableAlert(_("Cruise Faulted")),
-    ET.PERMANENT: NormalPermanentAlert(_("Cruise Faulted"), ""),
-    ET.NO_ENTRY: NoEntryAlert(_("Cruise Faulted")),
+    ET.IMMEDIATE_DISABLE: ImmediateDisableAlert(_("Cruise Fault: Restart the Car")),
+    ET.PERMANENT: NormalPermanentAlert(_("Cruise Fault: Restart the car to engage")),
+    ET.NO_ENTRY: NoEntryAlert(_("Cruise Fault: Restart the Car")),
   },
 
   EventName.accFaultedTemp: {
@@ -912,7 +913,7 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
     ET.PERMANENT: Alert(
       _("Reverse\nGear"),
       "",
-      AlertStatus.normal, AlertSize.full,
+      AlertStatus.normal, AlertSize.none,
       Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .2, creation_delay=0.5),
     # ET.USER_DISABLE: ImmediateDisableAlert(_("Reverse Gear")),
     ET.NO_ENTRY: NoEntryAlert(_("Reverse Gear")),
@@ -940,15 +941,6 @@ EVENTS: Dict[int, Dict[str, Union[Alert, AlertCallbackType]]] = {
     ET.IMMEDIATE_DISABLE: ImmediateDisableAlert(_("Harness Relay Malfunction")),
     ET.PERMANENT: NormalPermanentAlert(_("Harness Relay Malfunction"), _("Check Hardware")),
     ET.NO_ENTRY: NoEntryAlert(_("Harness Relay Malfunction")),
-  },
-
-  EventName.noTarget: {
-    ET.IMMEDIATE_DISABLE: Alert(
-      _("openpilot Canceled"),
-      _("No close lead car"),
-      AlertStatus.normal, AlertSize.mid,
-      Priority.HIGH, VisualAlert.none, AudibleAlert.disengage, 3.),
-    ET.NO_ENTRY: NoEntryAlert(_("No Close Lead Car")),
   },
 
   EventName.speedTooLow: {

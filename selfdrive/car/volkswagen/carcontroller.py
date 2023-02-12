@@ -2,9 +2,10 @@ from cereal import car
 from opendbc.can.packer import CANPacker
 from common.numpy_fast import clip
 from common.conversions import Conversions as CV
+from common.realtime import DT_CTRL
 from selfdrive.car import apply_std_steer_torque_limits
 from selfdrive.car.volkswagen import mqbcan, pqcan
-from selfdrive.car.volkswagen.values import CANBUS, PQ_CARS, CarControllerParams
+from selfdrive.car.volkswagen.values import CANBUS, PQ_CARS, CarControllerParams, STANDING_RESUME_SPAM_CARS
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 LongCtrlState = car.CarControl.Actuators.LongControlState
@@ -84,25 +85,35 @@ class CarController:
       hud_alert = 0
       if hud_control.visualAlert in (VisualAlert.steerRequired, VisualAlert.ldw):
         hud_alert = self.CCP.LDW_MESSAGES["laneAssistTakeOver"]
-      can_sends.append(self.CCS.create_lka_hud_control(self.packer_pt, CANBUS.pt, CS.ldw_stock_values, CC.enabled,
+      can_sends.append(self.CCS.create_lka_hud_control(self.packer_pt, CANBUS.pt, CS.ldw_stock_values, CC.latActive,
                                                        CS.out.steeringPressed, hud_alert, hud_control))
 
     if self.frame % self.CCP.ACC_HUD_STEP == 0 and self.CP.openpilotLongitudinalControl:
+      lead_distance = 0
+      if hud_control.leadVisible and self.frame * DT_CTRL > 1.0:  # Don't display lead until we know the scaling factor
+        lead_distance = 512 if CS.upscale_lead_car_signal else 8
       acc_hud_status = self.CCS.acc_hud_status_value(CS.out.cruiseState.available, CS.out.accFaulted, CC.longActive)
       set_speed = hud_control.setSpeed * CV.MS_TO_KPH  # FIXME: follow the recent displayed-speed updates, also use mph_kmh toggle to fix display rounding problem?
       can_sends.append(self.CCS.create_acc_hud_control(self.packer_pt, CANBUS.pt, acc_hud_status, set_speed,
-                                                       hud_control.leadVisible))
+                                                       lead_distance))
 
     # **** Stock ACC Button Controls **************************************** #
 
-    gra_send_ready = self.CP.pcmCruise and CS.gra_stock_values["COUNTER"] != self.gra_acc_counter_last
-    if gra_send_ready and (CC.cruiseControl.cancel or CC.cruiseControl.resume):
-      counter = (CS.gra_stock_values["COUNTER"] + 1) % 16
-      can_sends.append(self.CCS.create_acc_buttons_control(self.packer_pt, ext_bus, CS.gra_stock_values, counter,
-                                                           cancel=CC.cruiseControl.cancel, resume=CC.cruiseControl.resume))
+    if self.CP.pcmCruise and CS.gra_stock_values["COUNTER"] != self.gra_acc_counter_last:  # send just after stock
+      standing_resume_spam = CS.out.cruiseState.standstill and self.CP.carFingerprint in STANDING_RESUME_SPAM_CARS
+      spam_window = self.frame % 50 < 25  # 0.25 second gap between virtual button presses
+
+      press_cancel = CC.cruiseControl.cancel
+      press_resume = CC.cruiseControl.resume or (standing_resume_spam and spam_window)
+
+      if press_cancel or press_resume:
+        counter = (CS.gra_stock_values["COUNTER"] + 1) % 16
+        can_sends.append(self.CCS.create_acc_buttons_control(self.packer_pt, ext_bus, CS.gra_stock_values, counter,
+                                                             cancel=press_cancel, resume=press_resume))
 
     new_actuators = actuators.copy()
     new_actuators.steer = self.apply_steer_last / self.CCP.STEER_MAX
+    new_actuators.steerOutputCan = self.apply_steer_last
 
     self.gra_acc_counter_last = CS.gra_stock_values["COUNTER"]
     self.frame += 1
