@@ -73,11 +73,10 @@ class CarInterface(CarInterfaceBase):
     ret.steerLimitTimer = 0.4
     ret.steerRatio = 16.4  # Let the params learner figure this out
     tire_stiffness_factor = 1.0  # Let the params learner figure this out
-    ret.lateralTuning.pid.kpBP = [0.]
-    ret.lateralTuning.pid.kiBP = [0.]
-    ret.lateralTuning.pid.kf = 0.00006
-    ret.lateralTuning.pid.kpV = [0.6]
-    ret.lateralTuning.pid.kiV = [0.2]
+    ret.lateralTuning.pid.kpBP = [0., 14., 35.]
+    ret.lateralTuning.pid.kiBP = [0., 14., 35.]
+    ret.lateralTuning.pid.kpV = [0.12, 0.165, 0.185]
+    ret.lateralTuning.pid.kiV = [0.09, 0.10, 0.11]
 
     # Global longitudinal tuning defaults, can be overridden per-vehicle
 
@@ -122,10 +121,6 @@ class CarInterface(CarInterfaceBase):
       #ret.minSteerSpeed = 50 * CV.KPH_TO_MS
       ret.steerActuatorDelay = 0.1
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-      ret.lateralTuning.pid.kpBP = [0., 14., 35.]
-      ret.lateralTuning.pid.kiBP = [0., 14., 35.]
-      ret.lateralTuning.pid.kpV = [0.12, 0.165, 0.185]
-      ret.lateralTuning.pid.kiV = [0.09, 0.10, 0.11]
 
     elif candidate == CAR.POLO_MK6:
       ret.mass = 1230 + STD_CARGO_KG
