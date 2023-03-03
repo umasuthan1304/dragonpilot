@@ -67,8 +67,8 @@ def create_acc_accel_control(packer, bus, acc_type, enabled, accel, acc_control,
     "ACS_StSt_Info": acc_control != 1,
     "ACS_Typ_ACC": acc_type,
     "ACS_Sollbeschl": accel if acc_control == 1 else 3.01,
-    "ACS_zul_Regelabw": 0.2 if acc_control == 1 else 1.27,
-    "ACS_max_AendGrad": 3.0 if acc_control == 1 else 5.08,
+    "ACS_zul_Regelabw": 10.01 if acc_control == 1 else 0,
+    "ACS_max_AendGrad": 20.02 if acc_control == 1 else 0,
   }
 
   commands.append(packer.make_can_msg("ACC_System", bus, values))
